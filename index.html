@@ -133,6 +133,19 @@ label.f{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--
 .rir{display:flex;align-items:center;justify-content:flex-end;gap:8px;font-size:11.5px;color:var(--sub);margin-top:7px}
 .rir input{width:64px;text-align:center;padding:6px 4px}
 .gimg{display:block;width:100%;height:auto;border-radius:10px;border:1px solid var(--line);background:#fff}
+.restp{border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;background:var(--sunk)}
+.restp summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.restp summary::-webkit-details-marker{display:none}
+.restp summary b{font-family:var(--head);font-weight:400;font-size:15px}
+.restp summary span{font-size:12.5px;color:var(--sub)}
+.rest-row{display:grid;grid-template-columns:48px 1fr 48px;gap:8px;align-items:center}
+.rest-row.sm{grid-template-columns:40px 84px 40px}
+.rest-row .rep-b{height:44px;font-size:22px}
+.rest-row.sm .rep-b{height:40px}
+.rest-v{text-align:center;font-family:var(--head);font-size:18px}
+.rest-ex{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-top:1px solid var(--line)}
+.rest-n{min-width:0;display:flex;flex-direction:column;gap:2px;font-size:14px}
+.chip[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:#fff}
 .ghint{font-size:12.5px;color:var(--sub);display:grid;gap:4px;margin-bottom:8px}
 .mnav{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
 .mnav button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;font-size:13px}
@@ -836,6 +849,26 @@ function csvSets(){
 }
 /* ---------- workout timer (session mode) ---------- */
 let SATMODE = "interval";
+function restAdj(){ return S.settings.restAdj || (S.settings.restAdj = {g:0, per:{}}); }
+function saveSettings(){ markDirty("settings", S.settings); }
+function restFor(name, restTxt){ const a = restAdj(), k = slug(name); if (a.per && a.per[k] != null) return a.per[k]; return Math.max(15, restSecs(restTxt) + (a.g||0)); }
+function fmtRest(sec){ return sec >= 60 ? `${Math.floor(sec/60)}분${sec%60 ? " "+sec%60+"초" : ""}` : `${sec}초`; }
+function restPanel(r){
+  const a = restAdj();
+  let h = `<details class="restp"${S.restOpen ? " open" : ""}><summary><b>휴식 시간 조정</b><span>${a.g ? `전체 ${a.g>0?"+":""}${a.g}초` : "기본값"}${Object.keys(a.per||{}).length ? ` · 종목별 ${Object.keys(a.per).length}개` : ""}</span></summary>
+    <div class="tgl-h">전체 휴식 (모든 종목에 더하거나 빼기)</div>
+    <div class="rest-row"><button class="rep-b" data-act="rg" data-v="-15">−</button><div class="rest-v num">${a.g ? (a.g>0?"+":"")+a.g+"초" : "기본"}</div><button class="rep-b" data-act="rg" data-v="15">+</button></div>
+    <div class="quick" style="margin-top:6px">${[-30,-15,0,15,30,60].map(v=>`<button class="chip" data-act="rgset" data-v="${v}" aria-pressed="${(a.g||0)===v}">${v===0?"기본":(v>0?"+":"")+v+"초"}</button>`).join("")}</div>`;
+  if (r){
+    h += `<div class="tgl-h">오늘 종목별 휴식 <span class="muted">· 바꾼 값은 다음에도 그대로</span></div>`;
+    r.items.forEach(([name, , , rest]) => {
+      const k = slug(name), cur = restFor(name, rest), own = a.per && a.per[k] != null;
+      h += `<div class="rest-ex"><div class="rest-n"><b>${esc(name)}</b><span class="muted small">계획 ${esc(rest)}${own ? " · 직접 설정" : ""}</span></div>
+        <div class="rest-row sm"><button class="rep-b" data-act="rp" data-v="${k}|-15|${restSecs(rest)}">−</button><div class="rest-v num">${fmtRest(cur)}</div><button class="rep-b" data-act="rp" data-v="${k}|15|${restSecs(rest)}">+</button></div></div>`;
+    });
+  }
+  return h + `<button class="btn" data-act="rreset" style="margin-top:10px">휴식 시간 모두 기본값으로</button></details>`;
+}
 function timedSecs(tgt, wk){
   const m = tgt.match(/×\s*(\d+)\s*(?:~\s*(\d+))?\s*초/);
   if (!m) return null;
@@ -860,7 +893,7 @@ function buildSession(date){
         if (secs){ for (let side = 0; side < sides; side++) P({...base, kind:"hold", title:name + (sides>1 ? (side?" · 왼쪽":" · 오른쪽") : ""), secs, side, sides}); }
         else P({...base, kind:"reps", title:name, guess: repGuess(t.text)});
         const lastSet = s === ns - 1;
-        if (!(lastSet && !next)) P({kind:"rest", title: lastSet ? "다음 종목 준비" : "휴식", sub: lastSet ? `다음: ${next[0]}` : `다음: ${name} ${s+2}세트 · 휴식 ${rest}`, secs: lastSet ? Math.max(60, Math.min(120, restSecs(rest))) : restSecs(rest)});
+        if (!(lastSet && !next)) P({kind:"rest", title: lastSet ? "다음 종목 준비" : "휴식", sub: lastSet ? `다음: ${next[0]}` : `다음: ${name} ${s+2}세트 · 휴식 ${fmtRest(restFor(name, rest))}`, secs: lastSet ? Math.max(30, Math.min(120, restFor(name, rest))) : restFor(name, rest)});
       }
     });
     if (/상체/.test(i.plan)) P({kind:"cardio", title:"천국의 계단 (선택)", sub:"10~15분 저강도 · 건너뛰어도 돼요", secs: 600});
@@ -976,7 +1009,7 @@ function viewTimer(){
         ${st.tgt ? `<div class="ses-sub">${esc(st.tgt)}</div>` : st.sub ? `<div class="ses-sub">${esc(st.sub)}</div>` : ""}
         ${st.kind === "reps" ? repsBox(st) : `<div class="ses-clock num" id="sesClock">${fmtT(SES.left)}</div>
           <div class="ses-ctrl">${SES.running ? `<button class="btn" data-act="spause">일시정지</button>` : `<button class="btn primary" data-act="srun">${SES.left < (st.secs||0) ? "계속" : "시작"}</button>`}
-          <button class="btn" data-act="sadd">+15초</button></div>`}
+          ${st.kind === "rest" ? `<button class="btn" data-act="ssub">−15초</button>` : ""}<button class="btn" data-act="sadd">+15초</button></div>`}
         ${st.exName ? `<button class="ses-guide" data-act="guide" data-v="${esc(st.exName)}">자세 보기 ⓘ</button>` : ""}
       </section>
       <section class="sec"><div class="ses-nav"><button class="btn" data-act="sprev" ${SES.idx===0?"disabled":""}>‹ 이전</button><button class="btn" data-act="snext">건너뛰기 ›</button></div>
@@ -1002,6 +1035,7 @@ function viewTimer(){
       ${i.plan === "계단 인터벌" ? `<div class="seg small-seg" role="group">${[["interval","인터벌 30초/90초"],["liss","LISS 35분"]].map(([k,t])=>`<button data-act="satmode" data-v="${k}" aria-pressed="${SATMODE===k}">${t}</button>`).join("")}</div>` : ""}
       ${preview.steps.length ? `<div class="flow">${cnt("warm") ? `<span>워밍업 ${cnt("warm")}</span>` : ""}${cnt("posture") ? `<span>교정 ${cnt("posture")}</span>` : ""}${cnt("reps")+cnt("hold") ? `<span>세트 ${cnt("reps")+cnt("hold")}</span>` : ""}${cnt("cardio") ? `<span>천국의 계단</span>` : ""}${cnt("flex") ? `<span>스트레칭 ${cnt("flex")}</span>` : ""}${cnt("mob") ? `<span>가동범위 ${cnt("mob")}</span>` : ""}</div>
       <div class="small muted">예상 약 ${Math.round(total/60)}분 · 세트를 마치면 횟수를 넣고 '세트 완료' → 휴식 타이머가 자동으로 흘러요. 입력한 횟수는 오늘 기록에 저장돼요.</div>
+      ${restPanel(r)}
       <button class="btn primary" data-act="sstart">시작하기</button>` : `<div class="small muted">오늘은 완전 휴식일이에요. 가벼운 산책 정도만 하고, '오늘' 탭에서 주간 리뷰를 적어 보세요.</div>`}
       <div class="small muted">다른 날짜로 하려면 '오늘' 탭에서 날짜를 바꾼 뒤 오세요.</div></div></section>`;
   const fm = FREE.mode;
@@ -1045,6 +1079,11 @@ function timerClick(act, v, b){
   if (act === "sstart"){ try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); } catch(_){} SES = buildSession(S.date); sesStartStep(true); return true; }
   if (act === "srun"){ sesRun(); return true; }
   if (act === "spause"){ sesPause(); return true; }
+  if (act === "ssub"){ if (SES.running) SES.endAt = Math.max(Date.now() + 1000, SES.endAt - 15000); else SES.left = Math.max(1, SES.left - 15); renderTimerLive(); return true; }
+  if (act === "rg"){ const a = restAdj(); a.g = Math.max(-60, Math.min(120, (a.g||0) + +v)); S.restOpen = true; saveSettings(); render(); return true; }
+  if (act === "rgset"){ restAdj().g = +v; S.restOpen = true; saveSettings(); render(); return true; }
+  if (act === "rp"){ const [k, d, base] = v.split("|"); const a = restAdj(); a.per = a.per || {}; const cur = a.per[k] != null ? a.per[k] : Math.max(15, +base + (a.g||0)); a.per[k] = Math.max(15, Math.min(300, cur + +d)); S.restOpen = true; saveSettings(); render(); return true; }
+  if (act === "rreset"){ S.settings.restAdj = {g:0, per:{}}; S.restOpen = true; saveSettings(); render(); return true; }
   if (act === "sadd"){ if (SES.running) SES.endAt += 15000; else SES.left += 15; renderTimerLive(); return true; }
   if (act === "snext"){ clearInterval(sesInt); SES.running = false; sesNext(false); return true; }
   if (act === "sprev"){ sesPrev(); return true; }
@@ -1127,6 +1166,7 @@ $("#next").onclick = () => { S.date = addDays(S.date, 1); render(); };
 const openPick = () => { const p = $("#datePick"); try { p.showPicker(); } catch(_) { p.style.pointerEvents="auto"; p.focus(); p.click(); } };
 $("#when").onclick = openPick;
 $("#when").onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openPick(); } };
+document.addEventListener("toggle", e => { if (e.target.classList?.contains("restp")) S.restOpen = e.target.open; }, true);
 document.addEventListener("keydown", e => { if (e.key === "Escape") $("#sheetRoot").innerHTML = ""; });
 
 /* ---------- rest timer ---------- */
