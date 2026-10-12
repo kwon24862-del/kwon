@@ -1,5 +1,5 @@
 // 운동일지 — 오프라인 캐시. 앱을 고치면 VERSION만 올리면 됩니다.
-const VERSION = "homet-v1.6.0";
+const VERSION = "homet-v1.7.0";
 const FILES = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-maskable-512.png"];
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES.map(f => new Request(f, {cache: "reload"})))).then(() => self.skipWaiting()));
